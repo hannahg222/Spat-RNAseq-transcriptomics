@@ -572,7 +572,6 @@ write.csv(as.data.frame(sig_T0vT4),file='sig_T0vT4.csv')
 #108 DE genes
 
 # SHRUNKEN DATA
-## You may want to read up about doing an LFC shrink in the Deseq2 vignette. As I understand it, Deseq2 does a lot of behind the scenes calculations when you make your dds object, so running the LFC shrink isn't strictly necessary. Just incase, here is the code. 
 resShrunk_T0vT4 <- lfcShrink(dds_TT, coef="time_T4_vs_T0", type="ashr")
 # Create a tibble of results
 resShrunk_T0vT4_tb <- resShrunk_T0vT4 %>%
