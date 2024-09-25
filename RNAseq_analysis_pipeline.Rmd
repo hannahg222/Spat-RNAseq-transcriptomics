@@ -42,6 +42,11 @@ if (!require("BiocManager", quietly = TRUE))
 
 BiocManager::install("topGO")
 install.packages("gprofiler2")
+
+BiocManager::install("clusterProfiler", version = "3.19")
+BiocManager::install("pathview")
+BiocManager::install("enrichplot")
+BiocManager::install(organism, character.only = TRUE)
 ```
 
 ### Loading libraries
@@ -109,6 +114,10 @@ library(showtext)
 library("topGO")
 library("gprofiler2")
 library("ashr")
+library(clusterProfiler)
+library(enrichplot)
+library("DEGreport")
+library("FactoMineR")
 
 ```
 
@@ -751,6 +760,171 @@ plotCounts(dds_HabsYN.time.temp, gene=topGene, intgroup=c("habs", "time"))
 #output is scaffold_10__1_contigs__length_55049071.502
 ```
 
+```{r}
+# load in DEG values from csv
+deg_comps2=read.csv("deg_comparisions2.csv", header = TRUE)
+deg_comps2=deg_comparisions2
+#For everything except multistressor
+other=subset(deg_comps2, effect_of=="temperature_alone" |effect_of=="temperature_HAB" |effect_of== "hab_alone" |effect_of=="hab_temperature")
+T4=subset(deg_comps2, timepoint=="4")
+T8=subset(deg_comps2, timepoint=="8")
+T4$id=factor(T4$id, levels=c("LTLH_4", "LTHH_4", "HTLH_4", "HTHH_4"))
+T8$id=factor(T8$id, levels=c("LTLH_8", "LTHH_8", "HTLH_8", "HTHH_8"))
+
+# change lebaels for facet plot
+deg_comps2$timepoint <- factor(deg_comps2$timepoint, levels = c("0", "4", "8"),
+                  labels = c("Day 0 (Initial conditions)", "Day 4 (post-HAB exposure)", "Day 8 (post-recovery)"))
+deg_comps2$direction <- factor(deg_comps2$direction, levels = c("up", "down"),
+                              labels = c("Upregulated", "Downregulated"))
+deg_comps2$effect_of <- factor(deg_comps2$effect_of, levels = c("temperature_alone", "temperature_HAB", "hab_alone", "hab_temperature", "multistressor"),
+                              labels = c("MHW (alone)", "MHW (A. pacificum present)", "A. pacificum (alone)","A. pacificum (MHW present)", "Multi-stressor"))
+
+# make bar plot of DEGs from control T4 vs treatment T4 and the same for T8
+tiff("DE gene expression in different treatments2.tiff", units="cm", width=40, height=30, res=300)
+compbar=ggplot(deg_comps2, aes(x=treatment, y=degs, fill=direction))+
+  theme(
+    panel.background = element_rect(fill='transparent'), #transparent panel bg
+    plot.background = element_rect(fill='transparent', color=NA), #transparent plot bg
+    panel.grid.major = element_blank(), #remove major gridlines
+    panel.grid.minor = element_blank(), #remove minor gridlines
+    legend.background = element_rect(fill='transparent'))+#transparent legend bg
+  geom_bar(stat = "identity", position=position_dodge(), colour="black")+
+    theme(legend.position = "bottom")+
+  facet_wrap(~effect_of, scales = "free_x")+
+   scale_x_discrete(breaks=c("high_temp.0", "high_temp.4", "high_temp.8", "high_temp_hab.4", "high_temp_hab.8", "low_temp_hab.4", "low_temp_hab.8", "high_temp_hab.4", "high_temp_hab.8", "high_temp_hab.4", "high_temp_hab.8"),labels=c("Day 0", "Day 4", "Day 8", "Day 4", "MHW (Day 8", "Day 4", "Day 8", "Day 4", "Day 8", "Day 4", "Day 8"))+
+  theme(axis.text.x = element_text(size=11, angle = 45, vjust = 1, hjust=1), axis.title.y = element_text(size=12), 
+        axis.title.x =element_text(size=12, vjust=0), axis.text.y = element_text(size=11), plot.title = element_text(size=14))+
+  scale_fill_manual("Legend", values = c("Upregulated" = "#E27D60", "Downregulated" = "#41B3A3"))+
+  labs(x="Treatment", y="Number of differentially expressed genes")+
+  ggtitle("Differential gene expression based on applied stressor")
+    compbar 
+  dev.off()
+    # ggsave('DEG_graph_transparent.png', compbar, bg='transparent')
+   
+  ##Subset data to be for multistress only
+multi=subset(deg_comps2, effect_of=="multistressor")   
+   
+multi$timepoint <- factor(multi$timepoint, levels = c("4", "8"),
+                  labels = c("Day 4 (post-HAB exposure)", "Day 8 (post-recovery)"))
+multi$direction <- factor(multi$direction, levels = c("up", "down"),
+                              labels = c("Upregulated", "Downregulated"))
+multi$effect_of <- factor(multi$effect_of, levels = c("multistressor"),
+                              labels = c("Multi-stressor"))
+
+   ## Multistressor only 
+tiff("DE gene expression in multistressor treatments.tiff", units="cm", width=15, height=25, res=300)
+   compbar2=ggplot(multi, aes(x=treatment, y=degs, fill=direction))+
+  theme(
+    panel.background = element_rect(fill='transparent'), #transparent panel bg
+    plot.background = element_rect(fill='transparent', color=NA), #transparent plot bg
+    panel.grid.major = element_blank(), #remove major gridlines
+    panel.grid.minor = element_blank(), #remove minor gridlines
+    legend.background = element_rect(fill='transparent'))+#transparent legend bg
+  geom_bar(stat = "identity", position=position_dodge(), colour="black")+
+    theme(legend.position = "none")+
+  theme(axis.text.x = element_text(size=18, angle = 45, vjust = 1, hjust=1), axis.title.y = element_text(size=18), 
+        axis.title.x =element_text(size=16, vjust=0), axis.text.y = element_text(size=16), plot.title = element_text(size=14))+
+      scale_x_discrete(breaks=c("high_temp_hab.4", "high_temp_hab.8"),labels=c("Multistressor day 4", "Multistressor day 8"))+ 
+  scale_fill_manual("Legend", values = c("Upregulated" = "#E27D60", "Downregulated" = "#41B3A3"))+
+     labs(y="Number of differentially expressed genes")
+    compbar2
+    dev.off()
+
+```
+## Ridge plot
+```{r}
+##For more info:  https://bioinformatics.ccr.cancer.gov/docs/btep-coding-club/CC2023/FunctionalEnrich_clusterProfiler/
+
+# SET THE DESIRED ORGANISM HERE
+organism = "org.Hs.eg.db"
+library(organism, character.only = TRUE)
+keytypes
+
+
+# reading in data from deseq2
+df = read.csv("T4 HAB v noHAB both temps.csv", header=TRUE)
+
+# we want the log2 fold change 
+original_gene_list <- df$log2FoldChange
+original_gene_list
+# name the vector
+names(original_gene_list) <- df$swissprot
+names
+# omit any NA values 
+gene_list<-na.omit(original_gene_list)
+gene_list
+# sort the list in decreasing order (required for clusterProfiler)
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list
+keytypes(org.Hs.eg.db)
+gse_BP <- gseGO(geneList=gene_list, 
+             ont ="BP", 
+             keyType = "UNIPROT", 
+             minGSSize = 3, 
+             maxGSSize = 800, 
+             pvalueCutoff = 0.05, 
+             verbose = TRUE, 
+             OrgDb = organism, 
+             pAdjustMethod = "none")
+gse_BP
+
+gse_MF <- gseGO(geneList=gene_list, 
+                ont ="MF", 
+                keyType = "UNIPROT", 
+                minGSSize = 3, 
+                maxGSSize = 800, 
+                pvalueCutoff = 0.05, 
+                verbose = TRUE, 
+                OrgDb = organism, 
+                pAdjustMethod = "none")
+
+gse_CC <- gseGO(geneList=gene_list, 
+                ont ="CC", 
+                keyType = "UNIPROT", 
+                minGSSize = 3, 
+                maxGSSize = 800, 
+                pvalueCutoff = 0.05, 
+                verbose = TRUE, 
+                OrgDb = organism, 
+                pAdjustMethod = "none")
+
+gse_all <- gseGO(geneList=gene_list, 
+                ont ="all", 
+                keyType = "UNIPROT", 
+                minGSSize = 3, 
+                maxGSSize = 800, 
+                pvalueCutoff = 0.05, 
+                verbose = TRUE, 
+                OrgDb = organism, 
+                pAdjustMethod = "none")
+
+# Make the ridge plots
+MF1= ridgeplot(gse_MF, showCategory = 12) + 
+  labs(x = "Enrichment distribution")
+tiff("HABvnoHAB T4 RP_MF.tiff", units="cm", width=15, height=20, res=300)
+MF1 + theme(axis.text.y=element_text(size=10))
+dev.off()
+
+BP1=ridgeplot(gse_BP, showCategory = 12) + labs(x = "Enrichment distribution") 
+tiff("HABvnoHAB T4 RP_BP.tiff", units="cm", width=15, height=20, res=300)
+BP1 + theme(axis.text.y=element_text(size=10))
+dev.off()
+
+
+CC1= ridgeplot(gse_CC, showCategory = 12) + labs(x = "Enrichment distribution")
+dev.off()
+tiff("HABvnoHAB T4 RP_CC.tiff", units="cm", width=15, height=20, res=300)
+CC1 + theme(axis.text.y=element_text(size=10))
+dev.off()
+
+
+All_1= ridgeplot(gse_all, showCategory = 20, label_format = 60) + labs(x = "Enrichment distribution")
+tiff("HABvnoHAB T4 RP_all.tiff", units="cm", width=30, height=28, res=300)
+All_1 + theme(axis.text.y=element_text(size=16))
+dev.off()
+
+
+```
 
 ```{r, session info}
 sessionInfo()
